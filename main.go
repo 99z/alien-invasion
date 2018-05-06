@@ -12,8 +12,13 @@ import (
 	"time"
 )
 
+// QUESTIONS
+// 1. Is numAliens < numCities? Any restriction on these?
+// 2. Is a road always a 2-way connection? Meaning, if NY says it is connected
+// to Boston, is does Boston say it is connected to NY?
+
 var cities = make(map[string][]string)
-var aliens = make(map[int]string)
+var aliens = make(map[string][]int)
 var uniqueCities = make([]string, 0)
 
 func main() {
@@ -26,7 +31,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	runSimulation(numAliens)
+	populateAliens(numAliens)
+
+	runSimulation()
 
 	fmt.Println(cities)
 	fmt.Println(aliens)
@@ -77,10 +84,37 @@ func populateCities() {
 	}
 }
 
-func runSimulation(numAliens int) {
+func populateAliens(numAliens int) {
 	rand.Seed(time.Now().Unix())
 
 	for i := 0; i < numAliens; i++ {
-		aliens[i] = uniqueCities[rand.Intn(len(uniqueCities))]
+		city := uniqueCities[rand.Intn(len(uniqueCities))]
+
+		// Ensure no cities have more than 2 aliens
+		for len(aliens[city]) == 2 {
+			city = uniqueCities[rand.Intn(len(uniqueCities))]
+		}
+
+		aliens[city] = append(aliens[city], i)
+	}
+}
+
+func runSimulation() {
+	for city := range aliens {
+		if len(aliens[city]) == 2 {
+			fmt.Printf("%v has been destroyed by alien %v and alien %v!\n", city, aliens[city][0], aliens[city][1])
+
+			// Go to neighbors of deleted and delete itself from their lists
+			for _, neighbor := range cities[city] {
+				for i, n := range cities[neighbor] {
+					if n == city {
+						cities[neighbor][i] = cities[neighbor][len(cities[neighbor])-1]
+						cities[neighbor] = cities[neighbor][:len(cities[neighbor])-1]
+					}
+				}
+			}
+			delete(aliens, city)
+			delete(cities, city)
+		}
 	}
 }
