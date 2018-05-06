@@ -1,0 +1,6 @@
+NewYork north=Boston south=Miami east=Stamford
+Boston south=NewYork north=Portland
+Miami north=Boston west=Houston
+Portland south=Boston
+Stamford west=NewYork
+Houston east=Miami north=NewYork
