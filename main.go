@@ -23,12 +23,18 @@ import (
 // moves to city prior to iterator handling what happens for that city?
 // We will have 3 aliens in a city in this case
 
-var cities = make(map[string][]string)
-var aliens = make(map[string][]int)
-var uniqueCities = make([]string, 0)
+// Invasion represents an active simulation and its state
+type Invasion struct {
+	cities       map[string][]string
+	aliens       map[string][]int
+	uniqueCities []string
+}
 
 func main() {
-	populateCities()
+	state := new(Invasion)
+	state.initInvasion()
+
+	state.populateCities()
 
 	// Get number of aliens from program arg
 	numAliens, err := strconv.Atoi(os.Args[1:2][0])
@@ -37,17 +43,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	populateAliens(numAliens)
+	state.populateAliens(numAliens)
 
-	runSimulation()
+	fmt.Println(state.cities)
+	fmt.Println(state.aliens)
 
-	fmt.Println(cities)
-	fmt.Println(aliens)
+	state.runSimulation()
+
+	fmt.Println(state.cities)
+	fmt.Println(state.aliens)
+}
+
+func (invasion *Invasion) initInvasion() {
+	invasion.cities = make(map[string][]string)
+	invasion.aliens = make(map[string][]int)
+	invasion.uniqueCities = make([]string, 0)
 }
 
 // populateCities reads data from a file called "cities"
 // and populates the cities map
-func populateCities() {
+// Assumptions: file is NOT specified by program argument - spec only mentions
+// specifying # of aliens
+func (invasion *Invasion) populateCities() {
 	data, err := os.Open("cities")
 	if err != nil {
 		log.Fatal(err)
@@ -65,12 +82,12 @@ func populateCities() {
 		c := strings.Split(scanner.Text(), " ")
 
 		// If this city does not already exist
-		if len(cities[c[0]]) == 0 {
+		if len(invasion.cities[c[0]]) == 0 {
 			// Create new city with name of current line
-			cities[c[0]] = make([]string, 0)
+			invasion.cities[c[0]] = make([]string, 0)
 
 			// Add to uniqueCities for use in alien assignments
-			uniqueCities = append(uniqueCities, c[0])
+			invasion.uniqueCities = append(invasion.uniqueCities, c[0])
 		}
 
 		// Regex to filter out direction and equals sign
@@ -85,69 +102,79 @@ func populateCities() {
 		for _, neighbor := range c[1:] {
 			filtered := reg.ReplaceAllString(neighbor, "")
 
-			cities[c[0]] = append(cities[c[0]], filtered)
+			invasion.cities[c[0]] = append(invasion.cities[c[0]], filtered)
 		}
 	}
 }
 
-func populateAliens(numAliens int) {
+func (invasion *Invasion) populateAliens(numAliens int) {
 	rand.Seed(time.Now().Unix())
 
 	for i := 0; i < numAliens; i++ {
-		city := uniqueCities[rand.Intn(len(uniqueCities))]
+		city := invasion.uniqueCities[rand.Intn(len(invasion.uniqueCities))]
 
 		// Ensure no cities have more than 2 aliens
-		for len(aliens[city]) == 2 {
-			city = uniqueCities[rand.Intn(len(uniqueCities))]
+		for len(invasion.aliens[city]) == 2 {
+			city = invasion.uniqueCities[rand.Intn(len(invasion.uniqueCities))]
 		}
 
-		aliens[city] = append(aliens[city], i)
+		invasion.aliens[city] = append(invasion.aliens[city], i)
 	}
 }
 
-func destroyCity(city string) {
-	fmt.Printf("%v has been destroyed by alien %v and alien %v!\n", city, aliens[city][0], aliens[city][1])
+func (invasion *Invasion) destroyCity(city string) {
+	fmt.Printf("%v has been destroyed by alien %v and alien %v!\n", city, invasion.aliens[city][0], invasion.aliens[city][1])
 
 	// Go to neighbors of deleted and delete itself from their lists
-	for _, neighbor := range cities[city] {
-		for i, n := range cities[neighbor] {
+	for _, neighbor := range invasion.cities[city] {
+		for i, n := range invasion.cities[neighbor] {
 			if n == city {
-				cities[neighbor][i] = cities[neighbor][len(cities[neighbor])-1]
-				cities[neighbor] = cities[neighbor][:len(cities[neighbor])-1]
+				invasion.cities[neighbor][i] = invasion.cities[neighbor][len(invasion.cities[neighbor])-1]
+				invasion.cities[neighbor] = invasion.cities[neighbor][:len(invasion.cities[neighbor])-1]
 			}
 		}
 	}
-	delete(aliens, city)
-	delete(cities, city)
+	delete(invasion.aliens, city)
+	delete(invasion.cities, city)
 }
 
-func runSimulation() {
+func (invasion *Invasion) runSimulation() {
 	steps := 0
-	for len(aliens) != 0 && steps < 10000 {
-		for city := range aliens {
-			if len(aliens[city]) >= 2 {
-				destroyCity(city)
-			} else if len(aliens[city]) == 1 {
+	for len(invasion.aliens) != 0 && steps < 10000 {
+		fmt.Println("NEW TURN")
+
+		for city := range invasion.aliens {
+			if len(invasion.aliens[city]) >= 2 {
+				invasion.destroyCity(city)
+			}
+		}
+
+		for city := range invasion.aliens {
+			if len(invasion.aliens[city]) == 1 {
 				rand.Seed(time.Now().Unix())
 				// If this city has no neighbors to move to this alien
 				// does nothing
-				if len(cities[city]) == 0 {
-					steps++
+				if len(invasion.cities[city]) == 0 {
 					continue
 				}
-				newCity := cities[city][rand.Intn(len(cities[city]))]
+				newCity := invasion.cities[city][rand.Intn(len(invasion.cities[city]))]
 				// Move this alien
-				aliens[newCity] = append(aliens[newCity], aliens[city][0])
-				aliens[city] = aliens[city][1:]
+				invasion.aliens[newCity] = append(invasion.aliens[newCity], invasion.aliens[city][0])
+				invasion.aliens[city] = invasion.aliens[city][1:]
 
-				fmt.Printf("Alien %v moved from %v to %v.\n", aliens[newCity][len(aliens[newCity])-1], city, newCity)
+				fmt.Printf("Alien %v moved from %v to %v.\n", invasion.aliens[newCity][len(invasion.aliens[newCity])-1], city, newCity)
 
-				if len(aliens[newCity]) >= 2 {
-					destroyCity(newCity)
+				// Remove city from aliens if it was the only one there
+				if len(invasion.aliens[city]) == 0 {
+					delete(invasion.aliens, city)
 				}
-			}
 
-			steps++
+				// if len(aliens[newCity]) >= 2 {
+				// 	destroyCity(newCity)
+				// }
+			}
 		}
+
+		steps++
 	}
 }
