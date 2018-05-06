@@ -17,6 +17,12 @@ import (
 // 2. Is a road always a 2-way connection? Meaning, if NY says it is connected
 // to Boston, is does Boston say it is connected to NY?
 
+// CONCERNS
+// 1. Does city need to be destroyed as soon as move is made?
+// 2. What if 2 aliens begin in same city, but additional alien
+// moves to city prior to iterator handling what happens for that city?
+// We will have 3 aliens in a city in this case
+
 var cities = make(map[string][]string)
 var aliens = make(map[string][]int)
 var uniqueCities = make([]string, 0)
@@ -99,22 +105,49 @@ func populateAliens(numAliens int) {
 	}
 }
 
-func runSimulation() {
-	for city := range aliens {
-		if len(aliens[city]) == 2 {
-			fmt.Printf("%v has been destroyed by alien %v and alien %v!\n", city, aliens[city][0], aliens[city][1])
+func destroyCity(city string) {
+	fmt.Printf("%v has been destroyed by alien %v and alien %v!\n", city, aliens[city][0], aliens[city][1])
 
-			// Go to neighbors of deleted and delete itself from their lists
-			for _, neighbor := range cities[city] {
-				for i, n := range cities[neighbor] {
-					if n == city {
-						cities[neighbor][i] = cities[neighbor][len(cities[neighbor])-1]
-						cities[neighbor] = cities[neighbor][:len(cities[neighbor])-1]
-					}
+	// Go to neighbors of deleted and delete itself from their lists
+	for _, neighbor := range cities[city] {
+		for i, n := range cities[neighbor] {
+			if n == city {
+				cities[neighbor][i] = cities[neighbor][len(cities[neighbor])-1]
+				cities[neighbor] = cities[neighbor][:len(cities[neighbor])-1]
+			}
+		}
+	}
+	delete(aliens, city)
+	delete(cities, city)
+}
+
+func runSimulation() {
+	steps := 0
+	for len(aliens) != 0 && steps < 10000 {
+		for city := range aliens {
+			if len(aliens[city]) >= 2 {
+				destroyCity(city)
+			} else if len(aliens[city]) == 1 {
+				rand.Seed(time.Now().Unix())
+				// If this city has no neighbors to move to this alien
+				// does nothing
+				if len(cities[city]) == 0 {
+					steps++
+					continue
+				}
+				newCity := cities[city][rand.Intn(len(cities[city]))]
+				// Move this alien
+				aliens[newCity] = append(aliens[newCity], aliens[city][0])
+				aliens[city] = aliens[city][1:]
+
+				fmt.Printf("Alien %v moved from %v to %v.\n", aliens[newCity][len(aliens[newCity])-1], city, newCity)
+
+				if len(aliens[newCity]) >= 2 {
+					destroyCity(newCity)
 				}
 			}
-			delete(aliens, city)
-			delete(cities, city)
+
+			steps++
 		}
 	}
 }
