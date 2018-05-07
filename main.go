@@ -40,7 +40,6 @@ func main() {
 	numAliens, err := strconv.Atoi(os.Args[1:2][0])
 	if err != nil {
 		log.Fatal(err)
-		os.Exit(1)
 	}
 
 	state.populateAliens(numAliens)
@@ -68,7 +67,6 @@ func (invasion *Invasion) populateCities() {
 	data, err := os.Open("cities")
 	if err != nil {
 		log.Fatal(err)
-		os.Exit(1)
 	}
 
 	defer data.Close()
@@ -94,7 +92,6 @@ func (invasion *Invasion) populateCities() {
 		reg, err := regexp.Compile(`^(.*?)=`)
 		if err != nil {
 			log.Fatal(err)
-			os.Exit(1)
 		}
 
 		// Add neighbors of current city
@@ -108,6 +105,10 @@ func (invasion *Invasion) populateCities() {
 }
 
 func (invasion *Invasion) populateAliens(numAliens int) {
+	if len(invasion.uniqueCities) == 0 || len(invasion.cities) == 0 {
+		log.Fatalf("populateAliens: must populate cities first")
+	}
+
 	rand.Seed(time.Now().Unix())
 
 	for i := 0; i < numAliens; i++ {
