@@ -1,3 +1,6 @@
-Miami []
-Portland []
-TwinPeaks []
+Boston north=Portland 
+Miami west=Houston 
+Portland south=Boston 
+Stamford 
+Houston east=Miami north=TwinPeaks 
+TwinPeaks south=Houston 

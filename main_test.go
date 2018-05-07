@@ -1,16 +1,67 @@
 package main
 
-import "testing"
+import (
+	"bufio"
+	"log"
+	"os"
+	"strings"
+	"testing"
+)
 
-func testPopulateCities(t *testing.T) {
+// NOTES:
+// 1. Not sure how to test runSimulation since it is non-deterministic
+
+// TestPopulateCities verifies that number of cities and neighbors
+// matches the input file
+func TestPopulateCities(t *testing.T) {
 	var testState = new(Invasion)
 	testState.initInvasion()
 
-	// Test populateCities
+	testState.populateCities()
+
+	data, err := os.Open("cities")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer data.Close()
+
+	scanner := bufio.NewScanner(data)
+	scanner.Split(bufio.ScanLines)
+
+	cityCount := 0
+	neighborCount := 0
+
+	for scanner.Scan() {
+		cityCount++
+
+		currentCity := strings.Split(scanner.Text(), " ")
+
+		for range currentCity[1:] {
+			neighborCount++
+		}
+	}
+
+	createdNeighborCount := 0
+
+	for _, neighbors := range testState.cities {
+		for range neighbors {
+			createdNeighborCount++
+		}
+	}
+
+	if len(testState.cities) != cityCount {
+		t.Errorf("Number of created cities %v does not match number in cities file %v", len(testState.cities), cityCount)
+	} else if createdNeighborCount != neighborCount {
+		t.Errorf("Number of created neighbors %v does not match number in cities file %v", createdNeighborCount, neighborCount)
+	}
 }
 
+// Test creating aliens and placing them in cities
+// Assumption: Max number of aliens can only be # of cities * 2
 func TestPopulateAliens(t *testing.T) {
-	for i := 0; i < 10000; i++ {
+	uniqueCities := []string{"NewYork", "Boston", "Miami",
+		"Portland", "Stamford", "Houston", "TwinPeaks"}
+	for i := 0; i < len(uniqueCities)*2; i++ {
 		curAliens := i
 		// Parallelize
 		go func() {
@@ -25,8 +76,7 @@ func TestPopulateAliens(t *testing.T) {
 			testState.cities["Houston"] = []string{"east=Miami", "north=TwinPeaks"}
 			testState.cities["TwinPeaks"] = []string{"south=Houston"}
 
-			testState.uniqueCities = []string{"NewYork", "Boston", "Miami",
-				"Portland", "Stamford", "Houston", "TwinPeaks"}
+			testState.uniqueCities = uniqueCities
 
 			testState.populateAliens(curAliens)
 
@@ -44,6 +94,9 @@ func TestPopulateAliens(t *testing.T) {
 	}
 }
 
+// TestDestroyCity puts 2 aliens in every city, then goes through cities
+// and destroys each
+// Verifies cities map and alien locations map are empty as a result
 func TestDestroyCity(t *testing.T) {
 	var testState = new(Invasion)
 	testState.initInvasion()
@@ -66,9 +119,22 @@ func TestDestroyCity(t *testing.T) {
 	}
 }
 
-func TestRunSimulation(t *testing.T) {
+func TestWriteMapState(t *testing.T) {
 	var testState = new(Invasion)
 	testState.initInvasion()
 
 	testState.populateCities()
+
+	data, err := os.Open("cities")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer data.Close()
+
+	scanner := bufio.NewScanner(data)
+	scanner.Split(bufio.ScanLines)
+
+	for scanner.Scan() {
+		//
+	}
 }

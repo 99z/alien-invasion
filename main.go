@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"log"
 	"math/rand"
@@ -60,7 +61,16 @@ func (invasion *Invasion) writeMapState() {
 	w := bufio.NewWriter(f)
 
 	for city := range invasion.cities {
-		_, err := w.WriteString(fmt.Sprintf("%v %v\n", city, invasion.cities[city]))
+		var buffer bytes.Buffer
+		buffer.WriteString(city + " ")
+
+		for _, c := range invasion.cities[city] {
+			buffer.WriteString(c + " ")
+		}
+
+		buffer.WriteString("\n")
+
+		_, err := w.WriteString(buffer.String())
 		if err != nil {
 			log.Fatal(err)
 		}
