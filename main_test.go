@@ -11,13 +11,24 @@ func testPopulateCities(t *testing.T) {
 
 func TestPopulateAliens(t *testing.T) {
 	for i := 0; i < 10000; i++ {
+		curAliens := i
 		// Parallelize
 		go func() {
 			var testState = new(Invasion)
 			testState.initInvasion()
 
-			testState.populateCities()
-			testState.populateAliens(i)
+			testState.cities["NewYork"] = []string{"north=Boston", "south=Miami", "east=Stamford"}
+			testState.cities["Boston"] = []string{"south=NewYork", "north=Portland"}
+			testState.cities["Miami"] = []string{"north=NewYork", "west=Houston"}
+			testState.cities["Portland"] = []string{"south=Boston"}
+			testState.cities["Stamford"] = []string{"west=NewYork"}
+			testState.cities["Houston"] = []string{"east=Miami", "north=TwinPeaks"}
+			testState.cities["TwinPeaks"] = []string{"south=Houston"}
+
+			testState.uniqueCities = []string{"NewYork", "Boston", "Miami",
+				"Portland", "Stamford", "Houston", "TwinPeaks"}
+
+			testState.populateAliens(curAliens)
 
 			totalAliens := make([]int, 0)
 			for _, v := range testState.aliens {
@@ -26,8 +37,8 @@ func TestPopulateAliens(t *testing.T) {
 				}
 			}
 
-			if len(totalAliens) != i {
-				t.Errorf("Created aliens %v does not match input %v", len(totalAliens), i)
+			if len(totalAliens) != curAliens {
+				t.Errorf("Created aliens %v does not match input %v", len(totalAliens), curAliens)
 			}
 		}()
 	}
