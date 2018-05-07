@@ -9,15 +9,15 @@ import (
 )
 
 // NOTES:
-// 1. Not sure how to test runSimulation since it is non-deterministic
+// Not sure how to test runSimulation since it is non-deterministic
 
 // TestPopulateCities verifies that number of cities and neighbors
 // matches the input file
 func TestPopulateCities(t *testing.T) {
-	var testState = new(Invasion)
-	testState.initInvasion()
+	data := readCitiesFile()
+	defer data.Close()
 
-	testState.populateCities()
+	cities := populateCities(data)
 
 	data, err := os.Open("cities")
 	if err != nil {
@@ -29,68 +29,76 @@ func TestPopulateCities(t *testing.T) {
 	scanner.Split(bufio.ScanLines)
 
 	cityCount := 0
+	citiesFromFile := make([]string, 0)
+
 	neighborCount := 0
+	neighborsFromFile := make(map[string]int)
 
 	for scanner.Scan() {
 		cityCount++
 
 		currentCity := strings.Split(scanner.Text(), " ")
+		citiesFromFile = append(citiesFromFile, currentCity[0])
 
-		for range currentCity[1:] {
+		for _, n := range currentCity[1:] {
 			neighborCount++
+			neighborsFromFile[n] = 1
 		}
 	}
 
 	createdNeighborCount := 0
 
-	for _, neighbors := range testState.cities {
+	for _, neighbors := range cities {
 		for range neighbors {
 			createdNeighborCount++
 		}
 	}
 
-	if len(testState.cities) != cityCount {
-		t.Errorf("Number of created cities %v does not match number in cities file %v", len(testState.cities), cityCount)
+	// Test if number of cities and neighbors match the file
+	if len(cities) != cityCount {
+		t.Errorf("Number of created cities %v does not match number in cities file %v", len(cities), cityCount)
 	} else if createdNeighborCount != neighborCount {
 		t.Errorf("Number of created neighbors %v does not match number in cities file %v", createdNeighborCount, neighborCount)
+	}
+
+	// Test if city values match the file
+	for _, c := range citiesFromFile {
+		if len(cities[c]) == 0 {
+			t.Errorf("City %v not found in created map", c)
+		}
+	}
+
+	// Check if neighbor values match the file
+	for _, neighbors := range cities {
+		for _, n := range neighbors {
+			if neighborsFromFile[n] != 1 {
+				t.Errorf("Neighbor %v not found in created map", n)
+			}
+		}
 	}
 }
 
 // Test creating aliens and placing them in cities
 // Assumption: Max number of aliens can only be # of cities * 2
 func TestPopulateAliens(t *testing.T) {
-	uniqueCities := []string{"NewYork", "Boston", "Miami",
-		"Portland", "Stamford", "Houston", "TwinPeaks"}
-	for i := 0; i < len(uniqueCities)*2; i++ {
-		curAliens := i
-		// Parallelize
-		go func() {
-			var testState = new(Invasion)
-			testState.initInvasion()
+	data := readCitiesFile()
+	defer data.Close()
 
-			testState.cities["NewYork"] = []string{"north=Boston", "south=Miami", "east=Stamford"}
-			testState.cities["Boston"] = []string{"south=NewYork", "north=Portland"}
-			testState.cities["Miami"] = []string{"north=NewYork", "west=Houston"}
-			testState.cities["Portland"] = []string{"south=Boston"}
-			testState.cities["Stamford"] = []string{"west=NewYork"}
-			testState.cities["Houston"] = []string{"east=Miami", "north=TwinPeaks"}
-			testState.cities["TwinPeaks"] = []string{"south=Houston"}
+	cities := populateCities(data)
 
-			testState.uniqueCities = uniqueCities
+	for i := 0; i < len(cities)*2; i++ {
+		aliens := populateAliens(i, cities)
 
-			testState.populateAliens(curAliens)
-
-			totalAliens := make([]int, 0)
-			for _, v := range testState.aliens {
-				for alien := range v {
-					totalAliens = append(totalAliens, alien)
-				}
+		totalAliens := make([]int, 0)
+		for _, v := range aliens {
+			for alien := range v {
+				totalAliens = append(totalAliens, alien)
 			}
+		}
 
-			if len(totalAliens) != curAliens {
-				t.Errorf("Created aliens %v does not match input %v", len(totalAliens), curAliens)
-			}
-		}()
+		if len(totalAliens) != i {
+			t.Errorf("Created aliens %v does not match input %v", len(totalAliens), i)
+		}
 	}
 }
 
@@ -98,10 +106,16 @@ func TestPopulateAliens(t *testing.T) {
 // and destroys each
 // Verifies cities map and alien locations map are empty as a result
 func TestDestroyCity(t *testing.T) {
-	var testState = new(Invasion)
-	testState.initInvasion()
+	data := readCitiesFile()
+	defer data.Close()
 
-	testState.populateCities()
+	cities := populateCities(data)
+
+	testState := Invasion{
+		cities: cities,
+		aliens: make(map[string][]int),
+	}
+
 	alienID := 0
 	for k := range testState.cities {
 		testState.aliens[k] = append(testState.aliens[k], alienID)
@@ -119,13 +133,16 @@ func TestDestroyCity(t *testing.T) {
 	}
 }
 
+// TestWriteMapState tests that the values written to the result file
+// reflect the state of the game
 func TestWriteMapState(t *testing.T) {
-	var testState = new(Invasion)
-	testState.initInvasion()
+	data := readCitiesFile()
+	defer data.Close()
 
-	testState.populateCities()
+	cities := populateCities(data)
+	writeMapState(cities)
 
-	data, err := os.Open("cities")
+	data, err := os.Open("result")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -134,7 +151,52 @@ func TestWriteMapState(t *testing.T) {
 	scanner := bufio.NewScanner(data)
 	scanner.Split(bufio.ScanLines)
 
+	cityCount := 0
+	citiesFromFile := make([]string, 0)
+
+	neighborCount := 0
+	neighborsFromFile := make(map[string]int)
+
 	for scanner.Scan() {
-		//
+		cityCount++
+
+		currentCity := strings.Split(scanner.Text(), " ")
+		citiesFromFile = append(citiesFromFile, currentCity[0])
+
+		for _, n := range currentCity[1:] {
+			neighborCount++
+			neighborsFromFile[n] = 1
+		}
+	}
+
+	createdNeighborCount := 0
+
+	for _, neighbors := range cities {
+		for range neighbors {
+			createdNeighborCount++
+		}
+	}
+
+	// Test if number of cities and neighbors match the file
+	if len(cities) != cityCount {
+		t.Errorf("Number of created cities %v does not match number in cities file %v", len(cities), cityCount)
+	} else if createdNeighborCount != neighborCount {
+		t.Errorf("Number of created neighbors %v does not match number in cities file %v", createdNeighborCount, neighborCount)
+	}
+
+	// Test if city values match the file
+	for _, c := range citiesFromFile {
+		if len(cities[c]) == 0 {
+			t.Errorf("City %v not found in created map", c)
+		}
+	}
+
+	// Check if neighbor values match the file
+	for _, neighbors := range cities {
+		for _, n := range neighbors {
+			if neighborsFromFile[n] != 1 {
+				t.Errorf("Neighbor %v not found in created map", n)
+			}
+		}
 	}
 }

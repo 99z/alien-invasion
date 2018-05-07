@@ -15,18 +15,17 @@ import (
 
 // Invasion represents an active simulation and its state
 type Invasion struct {
-	cities       map[string][]string
-	aliens       map[string][]int
-	uniqueCities []string
+	cities map[string][]string
+	aliens map[string][]int
 }
 
 // Creates new Invasion, populates cities from a file, populates aliens
 // from program arg, runs simulation, writes map state to a file
 func main() {
-	state := new(Invasion)
-	state.initInvasion()
+	data := readCitiesFile()
+	defer data.Close()
 
-	state.populateCities()
+	cities := populateCities(data)
 
 	// Get number of aliens from program arg
 	numAliens, err := strconv.Atoi(os.Args[1:2][0])
@@ -34,24 +33,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-	state.populateAliens(numAliens)
+	aliens := populateAliens(numAliens, cities)
+
+	state := Invasion{
+		cities: cities,
+		aliens: aliens,
+	}
 
 	state.runSimulation()
 
-	state.writeMapState()
-}
-
-// initInvasion initializes Invasion attributes to empty data structures
-func (invasion *Invasion) initInvasion() {
-	invasion.cities = make(map[string][]string)
-	invasion.aliens = make(map[string][]int)
-	invasion.uniqueCities = make([]string, 0)
+	writeMapState(state.cities)
 }
 
 // writeMapState writes the end state of the invasion simulation to a file
 // in the same format as the input file
 // Assumptions: can't specify result filename
-func (invasion *Invasion) writeMapState() {
+func writeMapState(cities map[string][]string) {
 	f, err := os.Create("result")
 	if err != nil {
 		log.Fatal(err)
@@ -60,12 +57,16 @@ func (invasion *Invasion) writeMapState() {
 
 	w := bufio.NewWriter(f)
 
-	for city := range invasion.cities {
+	for city := range cities {
 		var buffer bytes.Buffer
 		buffer.WriteString(city + " ")
 
-		for _, c := range invasion.cities[city] {
-			buffer.WriteString(c + " ")
+		for i, c := range cities[city] {
+			if i == len(cities[city])-1 {
+				buffer.WriteString(c)
+			} else {
+				buffer.WriteString(c + " ")
+			}
 		}
 
 		buffer.WriteString("\n")
@@ -79,18 +80,25 @@ func (invasion *Invasion) writeMapState() {
 	w.Flush()
 }
 
-// populateCities reads data from a file called "cities"
-// and populates the cities map
-// Assumptions: file is NOT specified by program argument - spec only mentions
-// specifying # of aliens
-func (invasion *Invasion) populateCities() {
+// readCitiesFile reads a file named "cities" and returns a File struct
+// with the contents
+func readCitiesFile() *os.File {
 	data, err := os.Open("cities")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	defer data.Close()
+	return data
+}
 
+// populateCities reads data from a file called "cities"
+// and populates the cities map
+// Assumptions:
+// 1. File is NOT specified by program argument - spec only mentions
+// specifying # of aliens
+// 2. File will always be correctly formatted, i.e. no cities w/ spaces
+func populateCities(data *os.File) map[string][]string {
+	populated := make(map[string][]string)
 	scanner := bufio.NewScanner(data)
 	scanner.Split(bufio.ScanLines)
 
@@ -100,12 +108,12 @@ func (invasion *Invasion) populateCities() {
 		currentCity := strings.Split(scanner.Text(), " ")
 
 		// If this city does not already exist
-		if len(invasion.cities[currentCity[0]]) == 0 {
+		if len(populated[currentCity[0]]) == 0 {
 			// Create new city with name of current line
-			invasion.cities[currentCity[0]] = make([]string, 0)
+			populated[currentCity[0]] = make([]string, 0)
 
 			// Add to uniqueCities for use in alien assignments
-			invasion.uniqueCities = append(invasion.uniqueCities, currentCity[0])
+			// invasion.uniqueCities = append(invasion.uniqueCities, currentCity[0])
 		}
 
 		// Add neighbors of current city
@@ -115,33 +123,44 @@ func (invasion *Invasion) populateCities() {
 				continue
 			}
 
-			invasion.cities[currentCity[0]] = append(invasion.cities[currentCity[0]], neighbor)
+			populated[currentCity[0]] = append(populated[currentCity[0]], neighbor)
 		}
 	}
 
 	// Throw error and exit if no cities were created
-	if len(invasion.uniqueCities) == 0 || len(invasion.cities) == 0 {
+	if len(populated) == 0 {
 		log.Fatalf("populateAliens: must populate cities first")
 	}
+
+	return populated
 }
 
 // populateAliens creates numAliens and randomly places them in a city
 // Assumption: no more than 2 aliens may begin in the same city
-func (invasion *Invasion) populateAliens(numAliens int) {
+func populateAliens(numAliens int, cities map[string][]string) map[string][]int {
+	aliens := make(map[string][]int)
 	rand.Seed(time.Now().Unix())
+
+	uniqueCities := make([]string, 0)
+
+	for city := range cities {
+		uniqueCities = append(uniqueCities, city)
+	}
 
 	for i := 0; i < numAliens; i++ {
 		// Pick random city
-		city := invasion.uniqueCities[rand.Intn(len(invasion.uniqueCities))]
+		city := uniqueCities[rand.Intn(len(uniqueCities))]
 
 		// Ensure no cities have more than 2 aliens
-		for len(invasion.aliens[city]) == 2 {
-			city = invasion.uniqueCities[rand.Intn(len(invasion.uniqueCities))]
+		for len(aliens[city]) == 2 {
+			city = uniqueCities[rand.Intn(len(uniqueCities))]
 		}
 
 		// Append alien to city
-		invasion.aliens[city] = append(invasion.aliens[city], i)
+		aliens[city] = append(aliens[city], i)
 	}
+
+	return aliens
 }
 
 // destroyCity deletes a city, specified by a string, from the cities map
@@ -193,7 +212,7 @@ func (invasion *Invasion) runSimulation() {
 			// does nothing
 			if len(invasion.cities[city]) == 0 {
 				continue
-			} else if len(invasion.aliens[city]) == 1 {
+			} else {
 				rand.Seed(time.Now().Unix())
 
 				// Regex to filter out direction prefix so we can properly move
