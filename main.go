@@ -138,6 +138,10 @@ func populateCities(data *os.File) map[string][]string {
 // populateAliens creates numAliens and randomly places them in a city
 // Assumption: no more than 2 aliens may begin in the same city
 func populateAliens(numAliens int, cities map[string][]string) map[string][]int {
+	if numAliens > len(cities)*2 {
+		log.Fatalf("Number of aliens cannot be > 2x number of cities!")
+	}
+
 	aliens := make(map[string][]int)
 	rand.Seed(time.Now().Unix())
 
