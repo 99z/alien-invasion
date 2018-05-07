@@ -54,3 +54,10 @@ func TestDestroyCity(t *testing.T) {
 		t.Errorf("Not all cities destroyed!\nAlien occupied cities: %v\nCities: %v", testState.aliens, testState.cities)
 	}
 }
+
+func TestRunSimulation(t *testing.T) {
+	var testState = new(Invasion)
+	testState.initInvasion()
+
+	testState.populateCities()
+}

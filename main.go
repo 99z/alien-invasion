@@ -44,19 +44,38 @@ func main() {
 
 	state.populateAliens(numAliens)
 
-	fmt.Println(state.cities)
-	fmt.Println(state.aliens)
-
 	state.runSimulation()
 
-	fmt.Println(state.cities)
-	fmt.Println(state.aliens)
+	state.printMapState()
 }
 
 func (invasion *Invasion) initInvasion() {
 	invasion.cities = make(map[string][]string)
 	invasion.aliens = make(map[string][]int)
 	invasion.uniqueCities = make([]string, 0)
+}
+
+func (invasion *Invasion) printMapState() {
+	f, err := os.Create("result")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	w := bufio.NewWriter(f)
+
+	for city := range invasion.cities {
+		_, err := w.WriteString(fmt.Sprintf("%v %v\n", city, invasion.cities[city]))
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	w.Flush()
+}
+
+func (invasion *Invasion) formatNeighbors(city string) {
+	// asd
 }
 
 // populateCities reads data from a file called "cities"
@@ -89,17 +108,17 @@ func (invasion *Invasion) populateCities() {
 		}
 
 		// Regex to filter out direction and equals sign
-		reg, err := regexp.Compile(`^(.*?)=`)
-		if err != nil {
-			log.Fatal(err)
-		}
+		// reg, err := regexp.Compile(`^(.*?)=`)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
 
 		// Add neighbors of current city
 		// TODO Probably good to make sure this isn't the same as current city
 		for _, neighbor := range c[1:] {
-			filtered := reg.ReplaceAllString(neighbor, "")
+			// filtered := reg.ReplaceAllString(neighbor, "")
 
-			invasion.cities[c[0]] = append(invasion.cities[c[0]], filtered)
+			invasion.cities[c[0]] = append(invasion.cities[c[0]], neighbor)
 		}
 	}
 }
@@ -126,10 +145,16 @@ func (invasion *Invasion) populateAliens(numAliens int) {
 func (invasion *Invasion) destroyCity(city string) {
 	fmt.Printf("%v has been destroyed by alien %v and alien %v!\n", city, invasion.aliens[city][0], invasion.aliens[city][1])
 
+	reg, err := regexp.Compile(`^(.*?)=`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Go to neighbors of deleted and delete itself from their lists
 	for _, neighbor := range invasion.cities[city] {
+		neighbor = reg.ReplaceAllString(neighbor, "")
 		for i, n := range invasion.cities[neighbor] {
-			if n == city {
+			if strings.Contains(n, city) {
 				invasion.cities[neighbor][i] = invasion.cities[neighbor][len(invasion.cities[neighbor])-1]
 				invasion.cities[neighbor] = invasion.cities[neighbor][:len(invasion.cities[neighbor])-1]
 			}
@@ -140,42 +165,45 @@ func (invasion *Invasion) destroyCity(city string) {
 }
 
 func (invasion *Invasion) runSimulation() {
-	steps := 0
-	for len(invasion.aliens) != 0 && steps < 10000 {
-		fmt.Println("NEW TURN")
-
+	turns := 0
+	for len(invasion.aliens) != 0 && turns < 10000 {
+		// First pass: destroy cities with 2 aliens in them
+		// This prevents case of having 3 aliens in a city
 		for city := range invasion.aliens {
 			if len(invasion.aliens[city]) >= 2 {
 				invasion.destroyCity(city)
 			}
 		}
 
+		// Second pass: handle moving aliens
 		for city := range invasion.aliens {
-			if len(invasion.aliens[city]) == 1 {
+			// If this city has no neighbors to move to this alien
+			// does nothing
+			if len(invasion.cities[city]) == 0 {
+				continue
+			} else if len(invasion.aliens[city]) == 1 {
 				rand.Seed(time.Now().Unix())
-				// If this city has no neighbors to move to this alien
-				// does nothing
-				if len(invasion.cities[city]) == 0 {
-					continue
-				}
-				newCity := invasion.cities[city][rand.Intn(len(invasion.cities[city]))]
-				// Move this alien
-				invasion.aliens[newCity] = append(invasion.aliens[newCity], invasion.aliens[city][0])
-				invasion.aliens[city] = invasion.aliens[city][1:]
 
-				fmt.Printf("Alien %v moved from %v to %v.\n", invasion.aliens[newCity][len(invasion.aliens[newCity])-1], city, newCity)
+				reg, err := regexp.Compile(`^(.*?)=`)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				// Get random neighbor of current city for alien to move to
+				newCity := invasion.cities[city][rand.Intn(len(invasion.cities[city]))]
+				filtered := reg.ReplaceAllString(newCity, "")
+
+				// Move this alien
+				invasion.aliens[filtered] = append(invasion.aliens[filtered], invasion.aliens[city][0])
+				invasion.aliens[city] = invasion.aliens[city][1:]
 
 				// Remove city from aliens if it was the only one there
 				if len(invasion.aliens[city]) == 0 {
 					delete(invasion.aliens, city)
 				}
-
-				// if len(aliens[newCity]) >= 2 {
-				// 	destroyCity(newCity)
-				// }
 			}
 		}
 
-		steps++
+		turns++
 	}
 }
